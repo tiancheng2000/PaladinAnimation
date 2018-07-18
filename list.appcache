@@ -1,0 +1,26 @@
+CACHE MANIFEST
+
+#V0.1
+# 版本标志。如果希望将浏览器端的缓存文件、替换成新文件，需要提升版本号。
+
+#NOTE: To use this .appcache file, you must config the MIME mapping of your web server.
+#      e.g. for Appache users, add this line to conf/httpd.conf: 
+#      AddType text/cache-manifest .appcache
+
+# 需要实现离线存储的文件一览
+CACHE:
+animate.html
+atlas.xml
+background.jpg
+Paladin.png
+Swordman.png
+panel.png
+ic_paladin.png
+ic_swordman.png
+
+# 若离线缓存取得失败，需要在线加载的文件一览（一般为*，代表全部文件）
+NETWORK:
+*
+
+# 如果无法建立因特网连接，则用这个文件替代目录中的所有文件
+FALLBACK:

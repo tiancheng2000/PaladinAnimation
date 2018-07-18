@@ -1,0 +1,538 @@
+<!DOCTYPE HTML>
+
+<!-- Instruction##:
+  Offline: list.appcache is a manifest file for offline functionality. 
+  Use it only for STABLE release (otherwise will be difficult to develop). 
+	NOTE: search "var loadPath = " and turn off the random postfix so that to cache the atlas xml. 
+	Knowhow: for Chrome user, type "about:appcache-internals" to remove offline cache. -->
+<!-- <html> -->
+<html manifest="list.appcache">
+
+
+<!-- Instruction##:
+  Canvas: the core element of HTML5 2D/3D rendering. Animation is rendered in this region. 
+	Position and size of the Canvas element can be customized. 
+	NOTE: size must be specified as element's inline property, which will be read by the program. -->
+<style>
+.canvas {
+		position:absolute;
+		left:200px; top:200px;
+		margin:10px;
+}
+.canvas:hover {
+		outline-width: 1px;
+		outline-style: dotted; 
+		outline-color: #ff0000;
+}
+.panel img {
+		max-width:100%;max-height:100%;
+}
+</style>
+
+
+<!-- Instruction##:
+  Background: customizable. the file size should be optimized for loading performance. -->
+<body onload="init()" onclick="getCoords(event)" style="background-image:url(background.jpg)">
+
+<div id="panel" class="panel" style="position:absolute;left:50px;top:50px;height:48px;background:url(panel.png) repeat-x bottom;">
+	<img id="ic_paladin" name="Paladin" src="ic_paladin.png" draggable="true" ondragstart="dragIt(this, event);" />
+	<img id="ic_swordman" name="Swordman" src="ic_swordman.png" draggable="true" ondragstart="dragIt(this, event);" />
+</div>
+<canvas id="canvas" class="canvas" width="640" height="320" ondrop="dropIt(this, event);" ondragenter="return false;" ondragover="return false;"><em>Your browser has no HTML5 canvas control support!</em></canvas>
+
+<script type="text/javascript">
+//"use strict";
+
+//-- Constants and Enums ---------------------------------------------------------------------------
+var Status_Stand = 0;
+var Status_Move = 1;
+var Status_Attack = 2;
+var Status_Death = 3;
+var Direction_North = 0; //the order should be same as atlas image, so as to be used in AtlasFrame.render()
+var Direction_NW = 7;
+var FrameRate = 6.6; //frame per second. 
+var FrameRateMax = 60; 
+
+//-- Instance and Shared Fields --------------------------------------------------------------------
+//global instance variables
+var context;		// canvas context
+var xCanvas;		// position of canvas control in page
+var yCanvas;
+var canvasWidth;
+var canvasHeight;
+var xMouse = 0;
+var yMouse = 0;
+var animStand;			// default animation
+var animMove;
+var lastRenderTime = new Date().getTime();
+var firstLoad = true;
+var isPanelClickable = true;
+
+//sprite-related instance variables
+//Instruction##:
+//  modify the spriteName to switch to different Sprite.
+var spriteName = "Paladin"; //Paladin, Swordman, NEW_SPRITE 
+var atlasImage;		// whole atlas texture image. Rendering methods will render a region of it for a AtlasFrame. 
+var atlasTexture;	// AtlasTexture instance, corresponds to a <texture> element of atlas xml.
+var atlasMap = [];		// map of frame names to AtlasFrame instances(of one AtlasTexture instance)
+var xSprite = 0;
+var ySprite = 0;
+var currStatus = Status_Stand;
+var currDirection = 3; //0:North, 1:N-E, 2:East ...
+var currAnim;
+var standAnimList = [];		// array of Stand animations (though only one til now)
+var xMoveDest = 0;
+var yMoveDest = 0;
+var xMoveSteps = [];
+var yMoveSteps = [];
+var moveSpeed = 0; //pixel
+var moveStep = 0;
+var switchDirection = false;
+
+
+//---- Classes -------------------------------------------------------------------------------------
+//Instruction##:
+//  No modification is required for these classes: AtlasTexture, AtlasFrame, Animation.
+
+function AtlasTexture()
+{
+	this.m_filename;
+	this.m_maxFrameWidth;
+	this.m_maxFrameHeight;
+	//this.m_width;
+	//this.m_height;
+	this.m_offsetX;
+	this.m_offsetY;
+	this.load = function(elem)
+	{
+		this.m_filename = elem.getAttribute("file");
+		this.m_maxFrameWidth = parseInt(elem.getAttribute("maxFrameWidth"));
+		this.m_maxFrameHeight = parseInt(elem.getAttribute("maxFrameHeight"));
+		// offset is an optional parameter
+		if (elem.getAttribute("offsetX"))
+			this.m_offsetX = parseInt(elem.getAttribute("offsetX"));
+		else
+			this.m_offsetX = 0;
+		if (elem.getAttribute("offsetY"))
+			this.m_offsetY = parseInt(elem.getAttribute("offsetY"));
+		else
+			this.m_offsetY = 0;
+	}
+};
+
+function AtlasFrame()
+{
+	this.m_x;
+	this.m_y;
+	this.m_width;
+	this.m_height;
+	this.m_offsetX;
+	this.m_offsetY;
+	this.m_name;
+	this.load = function(elem)
+	{
+		this.m_name = elem.getAttribute("name");
+		this.m_x = parseInt(elem.getAttribute("x")); 
+		this.m_y = parseInt(elem.getAttribute("y"));
+		this.m_width = parseInt(elem.getAttribute("width"));
+		this.m_height = parseInt(elem.getAttribute("height"));
+		// offset: based on the largest frame's width/height - this frame's width/height, otherwise sprite will "jump" in animation
+		this.m_offsetX = parseInt(elem.getAttribute("offsetX"));
+		this.m_offsetY = parseInt(elem.getAttribute("offsetY"));
+	} 
+	this.render = function(x, y)
+	{
+	  //IMPROVE: sprite-related attribute: currDirection.
+		context.drawImage(atlasImage, this.m_x, this.m_y + currDirection * atlasTexture.m_maxFrameHeight,
+			this.m_width, this.m_height, 
+			this.m_offsetX+x-atlasTexture.m_maxFrameWidth/2, this.m_offsetY+y-atlasTexture.m_maxFrameHeight/2, 
+			this.m_width, this.m_height);
+	}
+};
+
+function Animation()
+{
+	this.m_currFrame;
+	this.m_age;
+	this.m_listFrame = []; //array of AtlasFrame
+
+	this.isFinished = function()
+	{
+		return this.m_age >= this.m_listFrame.length*1000/FrameRate;
+	}
+	this.start = function()
+	{
+		this.m_age = 0;
+		this.m_currFrame = 0;
+	}
+	this.init = function(frameNames)
+	{
+		this.start();
+		var frame;
+		for (var n = 0; n < frameNames.length; n++)
+		{
+			frame = atlasMap[frameNames[n]];
+			if (frame)
+				this.m_listFrame.push(frame);
+			else 
+				alert("missing frame:"+frameNames[n]);
+		}
+	}
+
+	this.update = function(timeElapsed)
+	{
+		this.m_age += timeElapsed;
+		//frames per second
+		this.m_currFrame = Math.floor(this.m_age/1000*FrameRate);
+		if (this.m_currFrame >= this.m_listFrame.length)
+			this.m_currFrame = this.m_listFrame.length-1;
+		if (this.m_currFrame < 0)
+			this.m_currFrame = 0;
+	}
+	this.render = function()
+	{
+    if (this.m_listFrame[this.m_currFrame] == null)
+      alert("Animation render failed:" + m_currFrame);
+    else
+	  	//IMPROVE: sprite-related attribute: xSprite, ySprite
+		  this.m_listFrame[this.m_currFrame].render(xSprite, ySprite);  
+	}
+	this.finish = function()
+	{
+		this.m_age = this.m_listFrame.length*1000/FrameRate;
+	}
+};
+
+
+//---- Public Methods / Interface ------------------------------------------------------------------
+
+function init()
+{
+	if(firstLoad){
+		//1.event handlers
+		//window.addEventListener ("mousemove", getCoords, true); //use onClick instead onMouseMove
+		// add support for iPhone, etc. 
+		document.addEventListener("touchstart", getCoordsTouch, true);
+		if(isPanelClickable){
+			var iconIds = ['ic_paladin','ic_swordman'];
+			for (i=0; i<iconIds.length; i++){
+				var icon = document.getElementById(iconIds[i]);
+				if(icon!=null){
+					icon.onclick = function(){spriteName=this.name;init();};
+				}
+			}
+		}
+
+		//2.canvas
+		canvas = document.getElementById('canvas');
+		if (canvas.getContext)
+		{
+			context = canvas.getContext('2d');
+		}
+		else
+		{
+			alert("FATAL: canvas 2d context cannot be retrieved.");
+			return;
+		}
+		// find position of canvas and store
+		xCanvas = canvas.offsetLeft;
+		yCanvas = canvas.offsetTop;
+		var elem = canvas.offsetParent;
+		while (elem)
+		{
+			xCanvas += elem.offsetLeft;
+			yCanvas += elem.offsetTop;
+			elem = elem.offsetParent;
+		}
+		canvasWidth = canvas.width;
+		canvasHeight = canvas.height;
+	}
+	else{
+		//reload global variables is necessary
+		if(currAnim!=null)
+			currAnim.finish();
+		xMoveDest = 0;
+		yMoveDest = 0;
+		switchDirection = false;
+		//currDirection = 3; //W-E
+		currStatus = Status_Stand;
+		atlasMap = [];
+		standAnimList = [];
+	}
+	
+	//3.sprite
+//Instruction##:
+//  modify the moveSpeed according to the sprite 
+	//Horseman has a faster speed(e.g.11.5), while footman moves slower(e.g.6).  
+	if(spriteName == "Paladin")
+		moveSpeed = 11.5; //pixel
+	else
+		moveSpeed = 6;
+	//alert("moveSpeed=" + moveSpeed);
+
+	atlasImage = new Image();
+  //IMPROVE: improve the sequence of Sprite instance loading/handling, so that image filename can 
+	//         be got from atlas.xml. Or use one atlas texture image file.
+	atlasImage.src = spriteName + ".png";
+	atlasImage.onload = function()
+	{ 
+		var loadPath = "atlas.xml"; //?" + Math.floor(Math.random()*10000); //<-- turn off cache. if use cache, comment off code after ? mark
+		var client = new XMLHttpRequest();
+		client.onreadystatechange = atlasHandler;
+		client.open("GET", loadPath, false); //false=sync-style, avoid (readyState==1) when calling client.send()
+		client.send();
+	}
+}
+
+function init2()
+{
+	//[center point] of Sprite
+	if(firstLoad){
+		xSprite = atlasTexture.m_maxFrameWidth/2; //initial position, left-upper corner of canvas
+		ySprite = atlasTexture.m_maxFrameHeight/2;
+	}
+	
+	animStand = new Animation();
+//Instruction##:
+//  An anmiation (usually an action) is composed of several AtlasFrame. Define it as your favourite.
+	animStand.init(["stand01","stand02", "stand03", "stand04", "stand05", "stand01"]);
+	standAnimList.push(animStand); //a sprite CAN have different sets of animation in its Stand status (only one set for this example')
+
+	animMove = new Animation();
+	animMove.init(["move01","move02", "move03", "move04", "move05", "move01"]);
+
+	currAnim = animStand;
+
+	//activate update loop and render loop.
+	if(firstLoad){
+		var timer_update = window.setInterval("update()", 1000/FrameRate);
+		requestAnimFrame(render);
+	}
+	
+	firstLoad = false;
+}
+
+function update() 
+{ 
+	if((xMouse>xCanvas && xMouse<xCanvas+canvasWidth && xMouse-xCanvas!=xMoveDest) 
+			|| (yMouse>yCanvas && yMouse<xCanvas+canvasHeight && yMouse-yCanvas!=yMoveDest)){
+		xMoveDest = (xMouse-xCanvas);
+		yMoveDest = (yMouse-yCanvas);
+		//alert("moveSrc=("+ xSprite + "," + ySprite +"),\nmoveDest=(" + xMoveDest + "," + yMoveDest +")");
+		var moveDistanceX = Math.abs(xMoveDest - xSprite);
+		var moveDistanceY = Math.abs(yMoveDest - ySprite);
+		var moveDistance = Math.sqrt(moveDistanceX*moveDistanceX + moveDistanceY*moveDistanceY);
+		var moveSteps = Math.floor(moveDistance / moveSpeed);
+		xMoveSteps = new Array(moveSteps);
+		yMoveSteps = new Array(moveSteps);
+		var xMoveStep = ((xMoveDest-xSprite>0)?1:-1) * moveDistanceX/moveSteps;
+		var yMoveStep = ((yMoveDest-ySprite>0)?1:-1) * moveDistanceY/moveSteps;
+		//alert("xMoveStep="+xMoveStep+"\nyMoveStep="+yMoveStep);
+		var i=0;
+		for(i=0; i<moveSteps; i++){ 
+			//NOTE: use array for future extension(e.g. path-finding). currently every step is equal.
+			xMoveSteps[i] = xMoveStep;
+			yMoveSteps[i] = yMoveStep;
+		}
+		//alert("xMoveSteps="+xMoveSteps+",\nyMoveSteps="+yMoveSteps);
+		moveStep = 0;
+	}
+	
+	if(xMoveDest!=0 && yMoveDest!=0 && xMoveSteps.length>0 && moveStep<=xMoveSteps.length-1){
+		if(moveStep==0){
+			if(currAnim!=null)
+				currAnim.finish(); //must finish Stand anim before moving
+			currStatus = Status_Move;
+			currDirection = getDirection(xSprite,ySprite,xMoveDest,yMoveDest);
+			//alert("currDirection="+currDirection+"\n xSprite="+xSprite+"\n ySprite="+ySprite+"\n xMoveDest="+xMoveDest+"\n yMoveDest="+yMoveDest);
+		}
+		xSprite = Math.floor(xSprite + xMoveSteps[moveStep]);
+		ySprite = Math.floor(ySprite + yMoveSteps[moveStep]);
+		moveStep++;
+		if( moveStep==xMoveSteps.length )
+			currStatus = Status_Stand;
+	}
+}  
+
+function render() 
+{  
+	var timeElapsed = new Date().getTime() - lastRenderTime;
+	lastRenderTime = new Date().getTime();
+
+	if (currAnim==null || currAnim.isFinished())
+	{
+		//alert("currStatus="+currStatus);
+		switch (currStatus)
+		{
+		case Status_Move:
+			currAnim = animMove;
+			break;
+		case Status_Stand:
+		default:
+			var MAX_RAND = 10;
+			var randNum = Math.random()*MAX_RAND + 0; //[0-MAX_RAND]
+			var prevAnim = currAnim;
+			if (prevAnim == animMove)
+				currAnim = animStand; //must stand after move
+			else if (randNum < standAnimList.length)
+				currAnim = standAnimList[Math.floor(randNum)];
+			else{
+				currAnim = null;
+			}
+//Instruction##:
+//  Randomly change direction during Stand status.
+			//IMPROVE: sprite-related attribute: switchDirection, currDirection
+			if (switchDirection && currAnim!=null && currAnim!=animMove){
+			  	if( Math.random() > 0.5 ){
+			  		if(++currDirection>7)currDirection = 0;
+			  	}	
+			  	else{
+			  		if(--currDirection<0)currDirection = 7;
+				  }
+    			switchDirection = false;
+			}
+			else if (!switchDirection && (randNum < MAX_RAND*0.05)){
+				switchDirection = true;
+			}
+			break;
+		}
+		if (currAnim != null)
+			currAnim.start();
+	}
+	
+	if (currAnim != null){
+ 		context.clearRect(0, 0, canvasWidth, canvasHeight);
+		currAnim.update(timeElapsed);
+		currAnim.render();
+	}  
+	requestAnimFrame(render);  
+}
+
+
+//---- Private Methods -----------------------------------------------------------------------------
+
+//accept and parse Atlas data returned from web server (requested in init()) 
+function atlasHandler()
+{
+	if (this.readyState == 4) 
+	{
+		if (this.status == 200 || this.status == 0) 
+		{
+			if (this.responseXML != null)
+			{
+				// successfully retrieved atlas data!
+				var x = this.responseXML.getElementsByTagName("texture");
+				if (x == null ){
+					alert("cannot get \"texture\" element");
+					return;
+				}
+				for (var n = 0; n < x.length; n++)
+				{
+					if(x[n].getAttribute("name") == spriteName){
+						x = x[n]; //<texture> element
+						atlasTexture = new AtlasTexture();
+						atlasTexture.load(x);
+						
+						x = x.getElementsByTagName("frame"); //<frame> elements 
+						if (x == null ) {
+							alert("no frame defined");
+							return;
+						}
+						for (n = 0; n < x.length; n++)
+						{
+							var atlasFrame = new AtlasFrame();
+							atlasFrame.load(x[n]);
+							atlasMap[x[n].getAttribute("name")] = atlasFrame;
+						}
+				
+						// carry out the rest of the initialization
+						init2();
+						break;
+					}
+				}
+			}
+			else 
+				alert("this.responseXML == null");
+		} 
+		else 
+		{
+			alert("this.status = " + this.status);
+		}
+	}
+}
+
+// main loop using setTimeout callback -- shim layer (first call is from init2())
+window.requestAnimFrame = (function(){
+    return  window.requestAnimationFrame       || 
+            window.webkitRequestAnimationFrame || 
+            window.mozRequestAnimationFrame    || 
+            window.oRequestAnimationFrame      || 
+            window.msRequestAnimationFrame     || 
+            function( callback ){
+              window.setTimeout(callback, 1000/FrameRateMax);  
+            };
+  })();
+
+//calculate the direction(0:North,.. 7:N-W) when moving from src to dest. 
+function getDirection(xSrc, ySrc, xDest, yDest)  
+{  
+	var xDelta = (xDest-xSrc);
+	var yDelta = (yDest-ySrc);
+	var tan = (yDelta==0)? -1 : Math.abs(yDelta/xDelta); //PI/2:0, 0:-1
+	var TAN_1 = 0.41421356; //Math.tan(Math.PI / 8);
+	var TAN_2 = 2.41421356; //Math.tan(Math.PI*3 / 8);
+	//alert(TAN_1 + "," + TAN_2);
+	var radian = 0; //0:0, 1:PI/4, 2:PI/2
+	if(tan==0 || tan>TAN_2)
+		radian = 2;
+	else if(tan>TAN_1 && tan<TAN_2)
+		radian = 1;
+	else
+		radian = 0;
+	
+	if(xDelta>0 && yDelta>0){
+		return (radian==0)? 2 : ((radian==1)?3:4);
+	}
+	else if (xDelta<0 && yDelta>0){
+		return (radian==0)? 6 : ((radian==1)?5:4);
+	}
+	else if (xDelta<0 && yDelta<0){
+		return (radian==0)? 6 : ((radian==1)?7:0);
+	}
+	else if (xDelta>0 && yDelta<0){
+		return (radian==0)? 2 : ((radian==1)?1:0);
+	}	
+}
+
+//---- Event Handlers ------------------------------------------------------------------------------
+
+function getCoords(event) 
+{
+	xMouse = event.clientX;
+	yMouse = event.clientY + window.pageYOffset;
+	//alert(xMouse + "," + yMouse);
+};
+// iPhone touch support
+function getCoordsTouch(event) 
+{
+	var touch = event.touches[0];
+	if (touch)
+	{
+		xMouse = touch.pageX;
+		yMouse = touch.pageY + window.pageYOffset;
+		//alert(xMouse + "," + yMouse);
+	}
+};
+
+function dragIt(target, e) {
+	e.dataTransfer.setData('spriteName', target.getAttribute("name"));
+}
+function dropIt(target, e) {
+	spriteName = e.dataTransfer.getData('spriteName');
+	e.preventDefault();
+	init();
+}
+</script>
+
+</body>
+</html>
