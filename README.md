@@ -1,5 +1,5 @@
 # Paladin's Adventures in HTML5 Canvas
-_(This document was firstly published in [CodeProject](https://www.codeproject.com/Articles/765125/Paladins-Adventures-in-HTML-Canvas))_
+_(This document was originally published on [CodeProject](https://www.codeproject.com/Articles/765125/Paladins-Adventures-in-HTML-Canvas))_
 
 Learn to animate Age of Empire paladin sprites by using basic HTML5 Canvas skills
 
