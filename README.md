@@ -3,7 +3,7 @@ _(This document was firstly published in [CodeProject](https://www.codeproject.c
 
 Learn to animate Age of Empire paladin sprites by using basic HTML5 Canvas skills
 
-![](http:/.github.com/tiancheng2000/PaladinAnimation/master/images/paladin_path_render_on.jpg)
+![](http://raw.github.com/tiancheng2000/PaladinAnimation/master/images/paladin_path_render_on.jpg)
 
 ## Introduction
 This article intends to contribute to the Beginner's Guide to HTML5 & CSS3 series (Canvas Part) with the following specifics:
@@ -16,7 +16,7 @@ In fact, I have taken a 2-hour lecture to HTML5 beginners with this sample. Now 
 ## Single-image Animation: Canvas Coordinates, Images, Timer Loops
 ### Context, Coordinates, Images Rendering
 Rendering an image to a HTML5 <canvas> element can be accomplished in merely 5 lines:
-![](http:/.github.com/tiancheng2000/PaladinAnimation/master/images/canvas_image_coordinate.jpg)
+![](http://raw.github.com/tiancheng2000/PaladinAnimation/master/images/canvas_image_coordinate.jpg)
 - L1: "canvas" in grey comes from the id of our core element, HTML5 <canvas>, which is declared in our HTML code like this:
 ```
 <canvas id="canvas" width="640" height="320" onclick="getCoords(event);">
@@ -72,7 +72,7 @@ window.requestAnimFrame is the current de facto standard for script-based animat
 In our rendering routine (render()), as you can see, image rendering Canvas API is called, with a newest (xSprite, ySprite) coordinate on each timer pulse. Don't forget to remove the old sprite before redrawing (for simplicity, the whole canvas is cleared here).
 
 ##Motion Path: Canvas Paths, Gradients, Text
-![Canvas Paths, Gradients, Text](http:/.github.com/tiancheng2000/PaladinAnimation/master/images/paladin_path_render_on_descript.jpg)
+![Canvas Paths, Gradients, Text](http://raw.github.com/tiancheng2000/PaladinAnimation/master/images/paladin_path_render_on_descript.jpg)
 As shown in the figure above, a timer loop-based animation has been implemented till now. The Paladin may complain about that we only spend a single piece of picture on him, which makes him looks like he is frozen. We will gracefully stem his anger in the next section. Before that, let's quicken our pace and clarify other useful Canvas topics.
 
 ### Gradients, Stroke Style, Paths
@@ -124,7 +124,7 @@ Text is not hard to display too. The only trick is measuring the width of the te
 I really hope you can enjoy the fun of controlling our 2D Canvas Paladin in a more realistic way. It's not difficult especially with the source template I provided. Of course, readers who want to focus on fundamental studies may go directly to the next section.
 
 ### 1.Atlas: animation images spliced
-![Atlas: paladin in 8 directions](http:/.github.com/tiancheng2000/PaladinAnimation/master/images/paladin_8directions.png)
+![Atlas: paladin in 8 directions](http://raw.github.com/tiancheng2000/PaladinAnimation/master/images/paladin_8directions.png)
 8 directions of a sprite (one direction per line) multiplies about 10 frames for each direction (5 frames per action, 2 kinds of action: stand and move), altogether 80 images will be plotted for a single sprite. In fact, for amateur artists new to 3D modeling, this will be the hardest part of work when extending the sample. Free sample models of 3DMax, Maya, or game map editors will be helpful.
 For cutting down the HTTP requests made to a server, images are usually spliced in web development.
 
@@ -203,7 +203,7 @@ With the above knowledge, furthermore, by searching "Instruction##" in my sample
 
 ## (Basic)Panel: Practice Time
 Subject of the practice:
-![Atlas: paladin in 8 directions](http:/.github.com/tiancheng2000/PaladinAnimation/master/images/panel.jpg)
+![Atlas: paladin in 8 directions](http://raw.github.com/tiancheng2000/PaladinAnimation/master/images/panel.jpg)
 The mini panel consists of almost all mentioned Canvas skills, and the answers can be found in my complete version of source. 
 Hint: The 2 miniatures, however, are not really Canvas Images. Don't waste time on them :) Sample only shows how to overlap ordinary HTML elements onto a HTML5 Canvas.
 
